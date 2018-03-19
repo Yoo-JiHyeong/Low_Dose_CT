@@ -133,12 +133,12 @@ if __name__ == "__main__":
 
         # print("Original Image")
         #
-        # # test_patient_internal, test_patient_external, test_patient_watershed = generate_markers(tmp)
-        # test_patient_internal, test_patient_external, test_patient_watershed = generate_markers(npys)
-        # # test_patient_internal = generate_markers(npys)
-        # print("Internal Marker")
+        # test_patient_internal, test_patient_external, test_patient_watershed = generate_markers(tmp)
+        test_patient_internal, test_patient_external, test_patient_watershed = generate_markers(npys)
+        # test_patient_internal = generate_markers(npys)
+        print("Internal Marker")
         # print(test_patient_internal.shape)
-        # utils.Plot2DSlice(test_patient_internal)
+        utils.Plot2DSlice(test_patient_internal)
         # # plt.subplot(222)
         # # plt.imshow(test_patient_internal, cmap='gray')
         # print("External Marker")
@@ -152,11 +152,11 @@ if __name__ == "__main__":
         # utils.Plot2DSlice(test_patient_watershed)
 
         # Some Testcode:
-        test_segmented, test_lungfilter, test_outline, test_watershed, test_sobel_gradient, test_marker_internal, test_marker_external, test_marker_watershed = seperate_lungs(
-            tmp)
-
-        plt.imshow(get_mediastinum(tmp, test_marker_internal), cmap='gray')
-        plt.show()
+        # test_segmented, test_lungfilter, test_outline, test_watershed, test_sobel_gradient, test_marker_internal, test_marker_external, test_marker_watershed = seperate_lungs(
+        #     tmp)
+        #
+        # plt.imshow(get_mediastinum(tmp, test_marker_internal), cmap='gray')
+        # plt.show()
         # print("Sobel Gradient")
         # plt.imshow(test_sobel_gradient, cmap='gray')
         # plt.show()

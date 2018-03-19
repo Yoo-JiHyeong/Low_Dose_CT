@@ -96,9 +96,9 @@ def dcm_to_npy(dcm, norm=False):
 
         if dcm.RescaleSlope != 1:
             pixel *= dcm.RescaleSlope
-        pixel += dcm.RescaleIntercept + 1024
+        pixel += dcm.RescaleIntercept
         # if pixel valus is lower than 0, that pixel is NOT USED PIXEL(circular CT)
-        np.clip(pixel, 0, 4095, out=pixel)
+        np.clip(pixel, -1024, 3071, out=pixel)
         return pixel / 4095 if norm is True else pixel
 
     if type(dcm) is list:

@@ -174,6 +174,7 @@ class Plot2DSlice:
     >>> npys = dcm_to_npy(dcms)
     >>> Plot2DSlice(npys)
     """
+
     def _remove_keymap_conflicts(self, new_keys_set):
         for prop in plt.rcParams:
             if prop.startswith('keymap.'):
@@ -187,7 +188,7 @@ class Plot2DSlice:
         self.fig, self.ax = plt.subplots()
         self.ax.volume = volume
         self.ax.index = volume.shape[0] // 2
-        print(self.ax.index)
+        print("now : ", self.ax.index)
         self.ax.imshow(volume[self.ax.index], cmap='gray')
         self.fig.canvas.mpl_connect('key_press_event', self._process_key)
         plt.show()
@@ -204,13 +205,11 @@ class Plot2DSlice:
         volume = self.ax.volume
         self.ax.index = (self.ax.index - 1) % volume.shape[0]  # wrap around using %
         self.ax.images[0].set_array(volume[self.ax.index])
-        print(self.ax.index)
 
     def _next_slice(self):
         volume = self.ax.volume
         self.ax.index = (self.ax.index + 1) % volume.shape[0]
         self.ax.images[0].set_array(volume[self.ax.index])
-        print(self.ax.index)
 
 
 # For test

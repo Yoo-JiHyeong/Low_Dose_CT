@@ -92,9 +92,7 @@ def lung_component_3d(image, get_bound=True):
     labeled_component = measure.label(lung_image)
     areas_3d = measure.regionprops(labeled_component)
     areas_3d.sort(key = lambda r: r.area)
-
     for area in areas_3d[-2:]:
-        print(area.area)
         lung_upper_bound = np.amax(area.coords, 0)[0]
         lung_lower_bound = np.amin(area.coords, 0)[0]
         for coord in area.coords:
@@ -113,9 +111,9 @@ def get_mediastinum_mask_v1(image):
     """
     # get lung location
     lung_image, upper_bound, lower_bound = lung_component_3d(image)
-    lung_index = [[np.where(x[:-1] != x[1:]) for x in ind_image] for ind_image in lung_image[lower_bound:upper_bound]]
+    lung_index = [[np.where(x[:-1] != x[1:]) for x in ind_image] for ind_image in lung_image[lower_bound:upper_bound,:,:]]
 
-    mediastinum_mask = np.zeros_like(image, dtype=bool)
+    mediastinum_mask = np.zeros_like(lung_image[lower_bound:upper_bound,:,:], dtype=bool)
 
     # fill the area between lung with 'True'
     for z_index, z in enumerate(lung_index):
@@ -129,25 +127,24 @@ def get_mediastinum_mask_v1(image):
     return mediastinum_mask, upper_bound, lower_bound
 
 
-def get_mediastinum(image, mask_func):
+def get_mediastinum(image, mask_func, small_region_threshold=0.005):
+    # small_region_threshold : to remove small region, set the threshold percentage with regard to entire (2d) volume
     # apply mediastinum mask to the original image
-    mediastinum_image = np.copy(image)
     mediastinum_mask, upper_bound, lower_bound = mask_func(image)
-    # print(np.count_nonzero(mediastinum_mask))
-    # print("-------------------")
+    mediastinum_image = np.copy(image[lower_bound:upper_bound,:,:])
     for z_index, z in enumerate(mediastinum_mask):
         labeled_area = measure.label(z)
         region_props = measure.regionprops(labeled_area)
         region_props.sort(key=lambda r: r.area)
-        # print(np.count_nonzero(mediastinum_mask))
-        # print([r.area for r in region_props])
         for region in region_props:
-            if region.area < 0.01 * image.shape[1] * image.shape[2]:
-                # remove the region, if area of the region is smaller than 1% of image volume
+            if region.area < small_region_threshold * image.shape[1] * image.shape[2]:
+                # remove the region, if area of the region is smaller than 0.1% of image volume
                 for coord in region.coords:
                     mediastinum_mask[z_index, coord[0], coord[1]] = False
-
     mediastinum_image[mediastinum_mask != True] = -2000
+
+    print("z-axis lower bound / upper bound / range : {0} / {1} / {2} (dicompyler style indexing)"\
+          .format(image.shape[0]-lower_bound, image.shape[0]-upper_bound, upper_bound - lower_bound + 1))
 
     return mediastinum_image
 
@@ -155,40 +152,33 @@ if __name__ == "__main__":
 
     # for test
     for folder in glob(r"C:\Users\yjh36\Desktop\TMT LAB\FDG-PET2\*"):
-        print("loaded : " + folder)
+        print(folder)
+        if "not_in_use" in folder:
+            continue
         dcm_path = folder
         dcms = glob(folder + "/*.dcm")
 
         dcms = utils.load_3d_dcm(dcm_path, parsetype="CT")
         npys = utils.dcm_to_npy(dcms)
 
-        if npys.shape[0] > 300:
-            continue
+        # if npys.shape[0] > 300:
+        #     continue
 
         print("shape : " + str(npys.shape))
 
-
-        lung_3d = lung_component_3d(npys)
-
-        lung_3d.astype(int)
-        # plt.subplot(121)
-        # plt.imshow(lung_3d[151], cmap='gray')
-        # plt.subplot(122)
-        # plt.imshow(lung_3d[120], cmap='gray')
-        # plt.show()
-
-
-        utils.Plot2DSlice(lung_3d[50:200])
-
         # tmp_res = get_mediastinum(npys[-111:-62], get_mediastinum_mask_v1)
-        # tmp_res2 = identify_lung(npys)
-        # tmp_res = get_mediastinum(npys, get_mediastinum_mask_v1)
-        # utils.Plot2DSlice(tmp_res2)
-        # utils.Plot2DSlice(npys[-111:-62])
+        # tmp_res = identify_lung(npys)
+        tmp_res = get_mediastinum(npys, get_mediastinum_mask_v1)
+        # tmp_res = get_mediastinum_mask_v1(npys)[0]
+        # tmp_res = lung_component_3d(npys)[0]
+
+        utils.Plot2DSlice(tmp_res)
 
 
+
+        """
         # for creating segmented dicom file ... extremely slow / need a compliment
-        # loaded = utils.load_3d_dcm(r"C:\Users\yjh36\Desktop\TMT LAB\FDG-PET2\10918160_20120912_105713_PT")
+        # loaded = utils.load_3d_dcm(r"C:/Users/yjh36/Desktop/TMT LAB\FDG-PET2/10918160_20120912_105713_PT")
         # for i, item in enumerate(loaded[-111:-62]):
         #
         #     tmp_res[i] += 1024
@@ -200,10 +190,8 @@ if __name__ == "__main__":
         #     item.PixelData = item.pixel_array.tostring()
         #
         #     item.save_as("C:/Users/yjh36/Desktop/sample/" + str(i) + ".dcm")
-
-
-
-        """
+        
+        
         tmp = npys[-90]
         tmp2 = identify_lung(tmp)
         plt.subplot(121)

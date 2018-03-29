@@ -12,6 +12,9 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 
 def get_threshold(image, prev_threshold=None):
+    """
+    Get optimal threshold by iterating
+    """
     if prev_threshold is None:
         body_mean = image[image > 0].mean()
         nonbody_mean = -1000
@@ -28,10 +31,18 @@ def get_threshold(image, prev_threshold=None):
 
 
 def identify_lung(image):
+    """
+    Get lung location
+
+    apply the threshold
+    -> remove components which touch the border
+    -> get two largest components (actually, three components including the bed)
+
+    """
     def _identify_lung(ind_img):
+        res_img = np.zeros_like(ind_img, dtype=bool)
         threshold = get_threshold(ind_img)
 
-        res_img = np.zeros_like(ind_img, dtype=bool)
         # thresholding
         res_img[ind_img > threshold] = False
         res_img[ind_img <= threshold] = True
@@ -43,12 +54,10 @@ def identify_lung(image):
         labeled_components = measure.label(border_cleared_image)
         areas = [r for r in measure.regionprops(labeled_components)]
 
-        minimum_volume = res_img.shape[0] * res_img.shape[1] * 0.01
-
+        # get the largest components
         areas.sort(key=lambda r: r.area)
         if len(areas) > 2:
             for region in areas[:-3]:
-                # print(region.area, areas[-1].area)
                 for coordinates in region.coords:
                     labeled_components[coordinates[0], coordinates[1]] = 0
 
@@ -60,49 +69,63 @@ def identify_lung(image):
     else:
         return _identify_lung(image)
 
+
 def get_mediastinum_mask_v1(image):
     """
     "Automated mediastinal lymph node detection from CT volumes based on intensity targeted"
     Oda et al, 2017
     """
-
-    image = identify_lung(image)
-    lung_index = [[np.where(x[:-1] != x[1:]) for x in ind_image] for ind_image in image]
+    # get lung location
+    lung_image = identify_lung(image)
+    lung_index = [[np.where(x[:-1] != x[1:]) for x in ind_image] for ind_image in lung_image]
 
     mediastinum_mask = np.zeros_like(image, dtype=bool)
 
+    # fill the area between lung with 'True'
     for z_index, z in enumerate(lung_index):
         for y_index, y in enumerate(z):
-            # print(y)
-            # print(y[0][::2])
             if len(y[0][::2]) >= 2:
                 for x_index in range(len(y[0][::2]) - 1):
-                    # print(y[0][2*x_index+1], y[0][2*x_index+2])
                     x1 = y[0][2*x_index+1]
                     x2 = y[0][2*x_index+2]
                     mediastinum_mask[z_index, y_index, x1:x2+1] = True
 
-    # remove bed from mask
-    for z in mediastinum_mask:
+    # remove the bed from the mediastinum mask
+    for z_index, z in enumerate(mediastinum_mask):
         labeled_area = measure.label(z)
-        area_props = measure.regionprops(labeled_area)
-        area_props.sort(key=lambda r : r.area)
-        print([r.area for r in area_props])
-        area1, area2 = area_props[-1], area_props[-2]
-        if area1.centroid[0] > area2.centroid[0]:
-            for coord in area1:
-                labeled_area[coord[0], coord[1]] = False
-        else:
-            for coord in area2:
-                labeled_area[coord[0], coord[1]] = False
+        region_props = measure.regionprops(labeled_area)
+        region_props.sort(key=lambda r : r.area)
+        if len(region_props) > 2:
+            region1, region2 = region_props[-1], region_props[-2]
+            if region1.centroid[0] > region2.centroid[0]:
+                for coord in region1.coords:
+                    mediastinum_mask[z_index, coord[0], coord[1]] = False
+            else:
+                for coord in region2.coords:
+                    mediastinum_mask[z_index, coord[0], coord[1]] = False
 
     return mediastinum_mask
 
 
 def get_mediastinum(image, mask_func):
+    # apply mediastinum mask to the original image
     mediastinum_image = np.copy(image)
-    mask = mask_func(image)
-    mediastinum_image[mask != True] = -2000
+    mediastinum_mask = mask_func(image)
+    # print(np.count_nonzero(mediastinum_mask))
+    # print("-------------------")
+    for z_index, z in enumerate(mediastinum_mask):
+        labeled_area = measure.label(z)
+        region_props = measure.regionprops(labeled_area)
+        region_props.sort(key=lambda r: r.area)
+        # print(np.count_nonzero(mediastinum_mask))
+        # print([r.area for r in region_props])
+        for region in region_props:
+            if region.area < 0.01 * image.shape[1] * image.shape[2]:
+                # remove the region, if area of the region is smaller than 1% of image volume
+                for coord in region.coords:
+                    mediastinum_mask[z_index, coord[0], coord[1]] = False
+
+    mediastinum_image[mediastinum_mask != True] = -2000
 
     return mediastinum_image
 
@@ -119,11 +142,31 @@ if __name__ == "__main__":
 
         if npys.shape[0] > 300:
             continue
+
         print("shape : " + str(npys.shape))
 
-        tmp_res = get_mediastinum(npys[-111:-62], get_mediastinum_mask_v1)
-        utils.Plot2DSlice(tmp_res)
+        # tmp_res = get_mediastinum(npys[-111:-62], get_mediastinum_mask_v1)
+        tmp_res2 = identify_lung(npys)
+        # tmp_res = get_mediastinum(npys, get_mediastinum_mask_v1)
+        utils.Plot2DSlice(tmp_res2)
         # utils.Plot2DSlice(npys[-111:-62])
+
+
+        # for creating segmented dicom file ... extremely slow / need a compliment
+        # loaded = utils.load_3d_dcm(r"C:\Users\yjh36\Desktop\TMT LAB\FDG-PET2\10918160_20120912_105713_PT")
+        # for i, item in enumerate(loaded[-111:-62]):
+        #
+        #     tmp_res[i] += 1024
+        #     tmp_res[i].clip(0,None,tmp_res[i])
+        #     tmp_res[i].astype("uint16")
+        #     for n, val in enumerate(item.pixel_array.flat):
+        #         item.pixel_array.flat[n] = tmp_res[i].flat[n]
+        #
+        #     item.PixelData = item.pixel_array.tostring()
+        #
+        #     item.save_as("C:/Users/yjh36/Desktop/sample/" + str(i) + ".dcm")
+
+
 
         """
         tmp = npys[-90]

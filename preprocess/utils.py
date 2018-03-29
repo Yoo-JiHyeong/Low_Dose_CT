@@ -203,11 +203,13 @@ class Plot2DSlice:
         volume = self.ax.volume
         self.ax.index = (self.ax.index - 1) % volume.shape[0]  # wrap around using %
         self.ax.images[0].set_array(volume[self.ax.index])
+        print(self.ax.index)
 
     def _next_slice(self):
         volume = self.ax.volume
         self.ax.index = (self.ax.index + 1) % volume.shape[0]
         self.ax.images[0].set_array(volume[self.ax.index])
+        print(self.ax.index)
 
 
 # For test

@@ -187,6 +187,7 @@ class Plot2DSlice:
         self.fig, self.ax = plt.subplots()
         self.ax.volume = volume
         self.ax.index = volume.shape[0] // 2
+        print(self.ax.index)
         self.ax.imshow(volume[self.ax.index], cmap='gray')
         self.fig.canvas.mpl_connect('key_press_event', self._process_key)
         plt.show()

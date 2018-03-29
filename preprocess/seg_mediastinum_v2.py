@@ -61,13 +61,49 @@ def identify_lung(image):
                 for coordinates in region.coords:
                     labeled_components[coordinates[0], coordinates[1]] = 0
 
+        # remove bed
+        areas.sort(key=lambda r: r.centroid)
+        for coordinates in areas[-1].coords:
+            labeled_components[coordinates[0], coordinates[1]] = 0
+
         border_cleared_image = labeled_components > 0
 
         return border_cleared_image
+
     if len(image.shape) == 3:
         return np.stack([_identify_lung(bc_image) for bc_image in image])
     else:
         return _identify_lung(image)
+
+
+def lung_component_3d(image, get_bound=True):
+    """
+    by finding two largest 3d connected components, get only lung component from whole body
+    if needed, return upper_bound and lower bound of lung region (z-axis)
+    """
+
+    lung_upper_bound = 0
+    lung_lower_bound = 0
+
+    res_image = np.zeros_like(image, dtype=bool)
+
+    lung_image = identify_lung(image)
+
+    labeled_component = measure.label(lung_image)
+    areas_3d = measure.regionprops(labeled_component)
+    areas_3d.sort(key = lambda r: r.area)
+
+    for area in areas_3d[-2:]:
+        print(area.area)
+        lung_upper_bound = np.amax(area.coords, 0)[0]
+        lung_lower_bound = np.amin(area.coords, 0)[0]
+        for coord in area.coords:
+            res_image[coord[0], coord[1], coord[2]] = True
+
+    if get_bound:
+        return res_image, lung_upper_bound, lung_lower_bound
+    else:
+        return res_image
 
 
 def get_mediastinum_mask_v1(image):
@@ -76,8 +112,8 @@ def get_mediastinum_mask_v1(image):
     Oda et al, 2017
     """
     # get lung location
-    lung_image = identify_lung(image)
-    lung_index = [[np.where(x[:-1] != x[1:]) for x in ind_image] for ind_image in lung_image]
+    lung_image, upper_bound, lower_bound = lung_component_3d(image)
+    lung_index = [[np.where(x[:-1] != x[1:]) for x in ind_image] for ind_image in lung_image[lower_bound:upper_bound]]
 
     mediastinum_mask = np.zeros_like(image, dtype=bool)
 
@@ -90,27 +126,13 @@ def get_mediastinum_mask_v1(image):
                     x2 = y[0][2*x_index+2]
                     mediastinum_mask[z_index, y_index, x1:x2+1] = True
 
-    # remove the bed from the mediastinum mask
-    for z_index, z in enumerate(mediastinum_mask):
-        labeled_area = measure.label(z)
-        region_props = measure.regionprops(labeled_area)
-        region_props.sort(key=lambda r : r.area)
-        if len(region_props) > 2:
-            region1, region2 = region_props[-1], region_props[-2]
-            if region1.centroid[0] > region2.centroid[0]:
-                for coord in region1.coords:
-                    mediastinum_mask[z_index, coord[0], coord[1]] = False
-            else:
-                for coord in region2.coords:
-                    mediastinum_mask[z_index, coord[0], coord[1]] = False
-
-    return mediastinum_mask
+    return mediastinum_mask, upper_bound, lower_bound
 
 
 def get_mediastinum(image, mask_func):
     # apply mediastinum mask to the original image
     mediastinum_image = np.copy(image)
-    mediastinum_mask = mask_func(image)
+    mediastinum_mask, upper_bound, lower_bound = mask_func(image)
     # print(np.count_nonzero(mediastinum_mask))
     # print("-------------------")
     for z_index, z in enumerate(mediastinum_mask):
@@ -145,10 +167,23 @@ if __name__ == "__main__":
 
         print("shape : " + str(npys.shape))
 
+
+        lung_3d = lung_component_3d(npys)
+
+        lung_3d.astype(int)
+        # plt.subplot(121)
+        # plt.imshow(lung_3d[151], cmap='gray')
+        # plt.subplot(122)
+        # plt.imshow(lung_3d[120], cmap='gray')
+        # plt.show()
+
+
+        utils.Plot2DSlice(lung_3d[50:200])
+
         # tmp_res = get_mediastinum(npys[-111:-62], get_mediastinum_mask_v1)
-        tmp_res2 = identify_lung(npys)
+        # tmp_res2 = identify_lung(npys)
         # tmp_res = get_mediastinum(npys, get_mediastinum_mask_v1)
-        utils.Plot2DSlice(tmp_res2)
+        # utils.Plot2DSlice(tmp_res2)
         # utils.Plot2DSlice(npys[-111:-62])
 
 
